@@ -25,7 +25,6 @@ class DataMem(object):
             self.DMem = [data.replace("\n", "") for data in dm.readlines()]
 
     def readInstr(self, ReadAddress):
-        print(ReadAddress)
         print(self.DMem)
         data_bin = self.DMem[ReadAddress] + self.DMem[ReadAddress + 1] + self.DMem[ReadAddress + 2] + self.DMem[ReadAddress + 3]
         data = hex(int(data_bin, 2))[2:]
