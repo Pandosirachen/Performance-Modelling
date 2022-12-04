@@ -34,7 +34,7 @@ class DataMem(object):
         pass
         
     def writeDataMem(self, Address, WriteData):
-
+        #WriteData should be length 32, since its from register files
         #append Dmem list to address+3 length
         Dmem_length= len(self.DMem)
         if Dmem_length < Address + 3:
@@ -65,10 +65,12 @@ class RegisterFile(object):
         return self.Registers[int(Reg_addr,2)]
         pass
     
-    def writeRF(self, Reg_addr, Wrt_reg_data):
+    def writeRF(self, Reg_addr, Wrt_reg_data:str):
         #Reg_addr should be a binary string of length 5
-        #Wrt_reg_data should be binary string of length 32
+        #Wrt_reg_data should be binary string of length < 32
         #we cannot write into register x0
+        if(len(Wrt_reg_data)<32):
+            Wrt_reg_data = Wrt_reg_data.zfill(32)
         if int(Reg_addr,2)>0:
             self.Registers[int(Reg_addr,2)] = Wrt_reg_data
         pass
@@ -255,16 +257,47 @@ class Core(object):
             operand2 = RegisterFile.readRF(self.myRF, rs2)
             value = bin(int(operand1,2)+int(operand2,2))
             value = value[2:]
-            print(value)
+        #todo
+        elif INS == "SUB":
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            operand2 = RegisterFile.readRF(self.myRF, rs2)
+            value = bin(int(operand1,2)-int(operand2,2))
+            value = value[2:]
+        #tested
+        elif INS == "XOR":
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            operand2 = RegisterFile.readRF(self.myRF, rs2)
+            value=bin(int(operand1,2) ^ int(operand2,2))
+            value = value[2:]
+        #tested
+        elif INS == "OR":
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            operand2 = RegisterFile.readRF(self.myRF, rs2)
+            value = bin(int(operand1,2) | int(operand2,2))
+            value = value[2:]
+        #tested
+        elif INS == "AND":
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            operand2 = RegisterFile.readRF(self.myRF, rs2)
+            value = bin(int(operand1,2) & int(operand2,2))
+            value = value[2:]
         elif INS == "LW":
             ALU = int(rs1, 2) + int(imm, 2)
         elif INS == "SW":
             ALU = int(rs1, 2) + int(imm, 2)
         elif INS == "HALT":
-                print("HALT")
+            print("HALT")
 
         #MEM Steps
         if INS == "ADD":
+            print("NOP")
+        elif INS == "SUB":
+            print("NOP")
+        elif INS == "XOR":
+            print("NOP")
+        elif INS == "OR":
+            print("NOP")
+        elif INS == "AND":
             print("NOP")
         elif INS == "LW":
             #get value from the address of ALU
@@ -277,6 +310,14 @@ class Core(object):
 
         #WB Steps
         if INS == "ADD":
+            RegisterFile.writeRF(self.myRF,rd,value)
+        elif INS == "SUB":
+            RegisterFile.writeRF(self.myRF,rd,value)
+        elif INS == "XOR":
+            RegisterFile.writeRF(self.myRF,rd,value)
+        elif INS == "OR":
+            RegisterFile.writeRF(self.myRF,rd,value)
+        elif INS == "AND":
             RegisterFile.writeRF(self.myRF,rd,value)
         elif INS == "LW":
             RegisterFile.writeRF(self.myRF,rd,value)
