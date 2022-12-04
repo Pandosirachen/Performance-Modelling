@@ -103,11 +103,92 @@ class Core(object):
         self.nextState = State()
         self.ext_imem = imem
         self.ext_dmem = dmem
+    
+    #this function format the result to 32 bits binary
+    def result_format_32(self, result:str):
+        result_len = len(result)
+        if result_len>32:
+            result = result[result_len-32:result_len]
+        elif result_len<32:
+            result = result.zfill(32)
+        return result
 
+    #sign extension and 32 bits formating function
+    def bin_sign_ext_32(self,op1:str):
+        #op1 should be binary strings with less than 32 bits or more than 32 bits
+        op1_len = len(op1)
+        if op1_len<32 and op1[0:1]=="0":
+            op1 = op1.zfill(32)
+
+        elif op1_len<32 and op1[0:1]=="1":
+            ones_len = 32-op1_len
+            while(ones_len>0):
+                op1 = "1"+op1
+                ones_len=ones_len-1
+        
+        elif op1_len>32:
+            op1 = op1[op1_len-32:op1_len]
+
+        return op1
+
+    #inverse bits
+    def inverse_bits(slef,op1:str):
+        l = len(op1)
+        k=""
+        for i in range(l):
+            k=k+"1"
+        result = bin(int(op1,2) ^ int(k,2))
+        return result[2:]
+
+
+    #i functions
+    def func_addi(self, op1:str, op2:str):
+        a = self.bin_sign_ext_32(op1)
+        b = self.bin_sign_ext_32(op2)
+        print(a," addi ", b )
+        result = bin(int(a,2)+int(b,2))
+        result = result[2:]
+        result = self.result_format_32(result)
+        print("addi result = "+result+" length = ",len(result))
+        return result
+
+    def func_xori(self, op1:str, op2:str):
+        a = self.bin_sign_ext_32(op1)
+        b = self.bin_sign_ext_32(op2)
+        print(a," xori ", b )
+        result = bin(int(a,2)^int(b,2))
+        result = result[2:]
+        result = self.result_format_32(result)
+        print("xori result = "+result+" length = ",len(result))
+        return result
+
+    def func_ori(self, op1:str, op2:str):
+        a = self.bin_sign_ext_32(op1)
+        b = self.bin_sign_ext_32(op2)
+        print(a," ori ", b )
+        result = bin(int(a,2)|int(b,2))
+        result = result[2:]
+        result = self.result_format_32(result)
+        print("ori result = "+result+" length = ",len(result))
+        return result
+
+    def func_andi(self, op1:str, op2:str):
+        a = self.bin_sign_ext_32(op1)
+        b = self.bin_sign_ext_32(op2)
+        print(a," andi ", b )
+        result = bin(int(a,2) & int(b,2))
+        result = result[2:]
+        result = self.result_format_32(result)
+        print("andi result = "+result+" length = ",len(result))
+        return result
+
+
+
+    #single stage steps
     def seperate_bits(self, cur_b):
         #IF Steps
         #get 32 bits instructions
-        print(cur_b)
+        print("--------->",cur_b)
 
         rs1=""
         rs2=""
@@ -257,30 +338,49 @@ class Core(object):
             operand2 = RegisterFile.readRF(self.myRF, rs2)
             value = bin(int(operand1,2)+int(operand2,2))
             value = value[2:]
-        #todo
+            value = self.result_format_32(value)
+        #Todo
+        #need to test on substract to negaticve value and what happened
         elif INS == "SUB":
             operand1 = RegisterFile.readRF(self.myRF, rs1)
             operand2 = RegisterFile.readRF(self.myRF, rs2)
-            value = bin(int(operand1,2)-int(operand2,2))
+            operand2 = self.inverse_bits(operand2)
+            value = bin(int(operand1,2)+int(operand2,2)+1)
             value = value[2:]
+            value = self.result_format_32(value)
         #tested
         elif INS == "XOR":
             operand1 = RegisterFile.readRF(self.myRF, rs1)
             operand2 = RegisterFile.readRF(self.myRF, rs2)
             value=bin(int(operand1,2) ^ int(operand2,2))
             value = value[2:]
+            value = self.result_format_32(value)
         #tested
         elif INS == "OR":
             operand1 = RegisterFile.readRF(self.myRF, rs1)
             operand2 = RegisterFile.readRF(self.myRF, rs2)
             value = bin(int(operand1,2) | int(operand2,2))
             value = value[2:]
+            value = self.result_format_32(value)
         #tested
         elif INS == "AND":
             operand1 = RegisterFile.readRF(self.myRF, rs1)
             operand2 = RegisterFile.readRF(self.myRF, rs2)
             value = bin(int(operand1,2) & int(operand2,2))
             value = value[2:]
+            value = self.result_format_32(value)
+        elif INS == "ADDI":
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            value = self.func_addi(operand1,imm)
+        elif INS == "XORI":
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            value = self.func_xori(operand1,imm)
+        elif INS == "ORI":
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            value = self.func_ori(operand1,imm)
+        elif INS == "ANDI":
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            value = self.func_andi(operand1,imm)
         elif INS == "LW":
             ALU = int(rs1, 2) + int(imm, 2)
         elif INS == "SW":
@@ -318,6 +418,14 @@ class Core(object):
         elif INS == "OR":
             RegisterFile.writeRF(self.myRF,rd,value)
         elif INS == "AND":
+            RegisterFile.writeRF(self.myRF,rd,value)
+        elif INS == "ADDI":
+            RegisterFile.writeRF(self.myRF,rd,value)
+        elif INS == "XORI":
+            RegisterFile.writeRF(self.myRF,rd,value)
+        elif INS == "ORI":
+            RegisterFile.writeRF(self.myRF,rd,value)
+        elif INS == "ANDI":
             RegisterFile.writeRF(self.myRF,rd,value)
         elif INS == "LW":
             RegisterFile.writeRF(self.myRF,rd,value)
@@ -404,7 +512,6 @@ class FiveStageCore(Core):
             wf.writelines(printstate)
 
 if __name__ == "__main__":
-     
     #parse arguments for input file location
     parser = argparse.ArgumentParser(description='RV32I processor')
     parser.add_argument('--iodir', default="", type=str, help='Directory containing the input files.')
@@ -414,7 +521,7 @@ if __name__ == "__main__":
 
 
     #remove this test line --sp6966
-    ioDir = ioDir+"\\Test"
+    ioDir = ioDir+"\\Test\\TC1"
 
 
 
@@ -426,6 +533,14 @@ if __name__ == "__main__":
     
     ssCore = SingleStageCore(ioDir, imem, dmem_ss)
     fsCore = FiveStageCore(ioDir, imem, dmem_fs)
+    
+    #test functions
+    print("-----------------------------------------------------------------------------")
+    #ssCore.func_addi("11111111111111111111111111111011","011111111111")
+    #ssCore.func_andi("00000000000000000000000000000010","111111111111")
+    print("-----------------------------------------------------------------------------")
+    #test functions
+
 
     while(True):
         if not ssCore.halted:
