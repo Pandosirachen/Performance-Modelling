@@ -58,7 +58,7 @@ class DataMem(object):
 class RegisterFile(object):
     def __init__(self, ioDir):
         self.outputFile = ioDir + "RFResult.txt"
-        self.Registers = [0x0 for i in range(32)]
+        self.Registers = ["00000000000000000000000000000000" for i in range(32)]
     
     def readRF(self, Reg_addr):
         # Fill in
@@ -182,6 +182,12 @@ class Core(object):
         print("andi result = "+result+" length = ",len(result))
         return result
 
+    def func_bne(self,op1:str, op2:str):
+        if len(op1)==32 and len(op2)==32:
+            return int(not op1==op2)
+        else:
+            print("ERROR: no equal string")
+            return 0
 
 
     #single stage steps
@@ -293,17 +299,19 @@ class Core(object):
         elif(cur_b[25:32] == "1100011"):
             print("b", end="")
             if(cur_b[(31-14):(32-12)] == "000"):
-                imm=cur_b[(31-31):(32-25)]+cur_b[(31-11):(32-7)]
+                imm=cur_b[(31-31):(32-31)]+cur_b[(31-7):(32-7)]+cur_b[(31-30):(32-25)]+cur_b[(31-11):(32-8)]
                 rs2=cur_b[(31-24):(32-20)]
                 rs1=cur_b[(31-19):(32-15)]
+                print("imm = ",imm,"imm.len=",len(imm))
                 print("-BEQ")
                 INS="BEQ"
 
             elif(cur_b[(31-14):(32-12)] == "001"):
-                print("-BNE")
-                imm=cur_b[(31-31):(32-25)]+cur_b[(31-11):(32-7)]
+                imm=cur_b[(31-31):(32-31)]+cur_b[(31-7):(32-7)]+cur_b[(31-30):(32-25)]+cur_b[(31-11):(32-8)]
                 rs2=cur_b[(31-24):(32-20)]
                 rs1=cur_b[(31-19):(32-15)]
+                print("imm = ",imm,"imm.len=",len(imm))
+                print("-BNE")
                 INS="BNE"
 
             else:
@@ -381,6 +389,21 @@ class Core(object):
         elif INS == "ANDI":
             operand1 = RegisterFile.readRF(self.myRF, rs1)
             value = self.func_andi(operand1,imm)
+        elif INS == "BNE":
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            operand2 = RegisterFile.readRF(self.myRF, rs2)
+            value = self.func_bne(operand1,operand2) #value =1 true, value = 0 false
+            if value:
+                current_pc_value = bin(self.nextState.IF["PC"])[2:].zfill(32)
+                imm = self.bin_sign_ext_32(imm+"0")
+
+                next_PC = int(self.func_addi(current_pc_value,imm),2)-4
+                #we minus 4 here since we will add the 4 back in the step(), this could be a bad fix to make it the same as the TEST case result
+                self.nextState.IF["PC"]=next_PC
+
+            pass
+        elif INS == "BQE":
+            pass
         elif INS == "LW":
             ALU = int(rs1, 2) + int(imm, 2)
         elif INS == "SW":
@@ -521,7 +544,7 @@ if __name__ == "__main__":
 
 
     #remove this test line --sp6966
-    ioDir = ioDir+"\\Test\\TC1"
+    ioDir = ioDir+"\\Test\\TC2"
 
 
 
