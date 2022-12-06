@@ -189,6 +189,13 @@ class Core(object):
             print("ERROR: no equal string")
             return 0
 
+    def func_beq(self,op1:str, op2:str):
+        if len(op1)==32 and len(op2)==32:
+            return int(op1==op2)
+        else:
+            print("ERROR: no equal string")
+            return 0
+    
 
     #single stage steps
     def seperate_bits(self, cur_b):
@@ -292,7 +299,7 @@ class Core(object):
         #J
         elif(cur_b[25:32] == "1101111"):
             print("j-JAL")
-            imm=cur_b[(31-31):(32-12)]
+            imm=cur_b[(31-31):(32-31)]+cur_b[(31-19):(32-12)]+cur_b[(31-20):(32-20)]+cur_b[(31-30):(32-21)]
             rd=cur_b[(31-11):(32-7)]
             INS="JAL"
         #B
@@ -401,8 +408,27 @@ class Core(object):
                 #we minus 4 here since we will add the 4 back in the step(), this could be a bad fix to make it the same as the TEST case result
                 self.nextState.IF["PC"]=next_PC
 
-            pass
-        elif INS == "BQE":
+        elif INS == "BEQ":
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            operand2 = RegisterFile.readRF(self.myRF, rs2)
+            value = self.func_beq(operand1,operand2) #value =1 true, value = 0 false
+            if value:
+                current_pc_value = bin(self.nextState.IF["PC"])[2:].zfill(32)
+                imm = self.bin_sign_ext_32(imm+"0")
+
+                next_PC = int(self.func_addi(current_pc_value,imm),2)-4
+                #we minus 4 here since we will add the 4 back in the step(), this could be a bad fix to make it the same as the TEST case result
+                self.nextState.IF["PC"]=next_PC
+        elif  INS == "JAL":
+            #caluculate PC+4
+            imm = self.bin_sign_ext_32(imm+"0")
+            value = bin(self.nextState.IF["PC"]+4)[2:]
+
+            #set next PC to imm
+            value.zfill(32)
+            current_pc_value = bin(self.nextState.IF["PC"])[2:].zfill(32)
+            next_PC = int(self.func_addi(current_pc_value,imm),2)-4
+            self.nextState.IF["PC"]=next_PC
             pass
         elif INS == "LW":
             ALU = int(rs1, 2) + int(imm, 2)
@@ -454,6 +480,8 @@ class Core(object):
             RegisterFile.writeRF(self.myRF,rd,value)
         elif INS == "SW":
             print("NOP")
+        elif INS == "JAL":
+            RegisterFile.writeRF(self.myRF,rd,value)
         elif INS == "HALT":
             print("HALT")
 
@@ -544,7 +572,7 @@ if __name__ == "__main__":
 
 
     #remove this test line --sp6966
-    ioDir = ioDir+"\\Test\\TC2"
+    ioDir = ioDir+"\\Test\\TC3"
 
 
 
