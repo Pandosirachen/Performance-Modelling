@@ -16,6 +16,12 @@ class InsMem(object):
         #read instruction memory
         #return 32 bit hex val
         pass
+
+    def isOutofbound(self, ReadAddress):
+        if ReadAddress>=len(self.IMem):
+            return True
+        else:
+            return False
           
 class DataMem(object):
     def __init__(self, name, ioDir):
@@ -103,6 +109,7 @@ class Core(object):
         self.nextState = State()
         self.ext_imem = imem
         self.ext_dmem = dmem
+        self.stallfactor = 0
     
     #this function format the result to 32 bits binary
     def result_format_32(self, result:str):
@@ -201,7 +208,14 @@ class Core(object):
         if self.state.IF["nop"] == 1:
             return
         print("IF")
+        nextline = self.state.IF["PC"]+4
+        isOutofbound = InsMem.isOutofbound(self.ext_imem,nextline)
+        if isOutofbound:
+            self.nextState.IF["nop"]=1
+            self.nextState.ID["nop"]=1
+            return
         str = InsMem.readInstr(self.ext_imem,self.state.IF["PC"])
+        self.nextState.IF["PC"]+=4
         self.nextState.ID["Instr"] = InsMem.readInstr(self.ext_imem,self.state.IF["PC"])
         #TODO deal with HALT instruction, halt is not always the end
         if str[25:32] == "1111111":
@@ -215,7 +229,6 @@ class Core(object):
     
     #five_stage_ID
     def five_stage_ID(self):
-        #test case
         if self.state.ID["nop"] == 1:
             self.nextState.EX["nop"] = 1
             return
@@ -363,6 +376,19 @@ class Core(object):
         else:
             print("ERROR: No matching type")
             INS="HALT"
+        
+        #stalling
+        """
+        if self.state.MEM["Wrt_reg_addr"] == rs1:
+            self.nextState.EX["nop"] = 1 #mark this step as not functioning
+            self.stallfactor = 1
+            return
+        elif self.state.MEM["Wrt_reg_addr"] == rs2:
+            self.stallfactor = 1
+            self.nextState.EX["nop"] = 1 #mark this step as not functioning
+            return
+            #self.nextState.EX["nop"] = 1
+        """
 
         if INS==("ADDI" or "ANDI" or "ORI" or "XORI") :
             self.nextState.EX["is_B_type"] = 0
@@ -447,13 +473,18 @@ class Core(object):
         self.nextState.EX["Read_data2"] = op2
         self.nextState.EX["Imm"] = imm
         self.nextState.EX["DestReg"] = rd
-        self.nextState.EX["nop"]=0
-        if(INS == "HALT"):
+
+        if INS == "HALT":
             self.nextState.EX["nop"]= 1
         else:
             self.nextState.EX["nop"]= 0
-
-
+        #hazard checking ID->EX
+        if self.nextState.WB["Wrt_reg_addr"] == rs1:
+            self.nextState.EX["Read_data1"] = self.nextState.WB["Wrt_data"]
+            return
+        elif self.nextState.WB["Wrt_reg_addr"] == rs2:
+            self.nextState.EX["Read_data2"] = self.nextState.WB["Wrt_data"]
+            return
     
     #five_stage_EX
     def five_stage_EX(self):
@@ -464,8 +495,6 @@ class Core(object):
 #           xor 11
 #           bne 01
 #           beq 00
-        
-
         if self.state.EX["nop"] == 1:
             self.nextState.MEM["nop"] = 1
             return
@@ -553,7 +582,7 @@ class Core(object):
             #TODO!!!!!
             #TOTEST!!!!
             value = int(operand1, 2) + int(imm, 2)
-            self.nextState.MEM["Store_data"] = RegisterFile.readRF(self.myRF, operand2)
+            self.nextState.MEM["Store_data"] = operand2
 
         self.nextState.MEM["nop"] = 0
         self.nextState.MEM["ALUresult"] = value
@@ -944,9 +973,6 @@ class FiveStageCore(Core):
             self.five_stage_ID()
             self.five_stage_IF()
 
-        if not (self.state.IF["nop"] and self.state.ID["nop"] and self.state.EX["nop"] and self.state.MEM["nop"] and self.state.WB["nop"]):
-            self.nextState.IF["PC"]+=4
-
         self.myRF.outputRF(self.cycle) # dump RF
         self.printState(self.nextState, self.cycle) # print states after executing cycle 0, cycle 1, cycle 2 ... 
         
@@ -980,7 +1006,7 @@ if __name__ == "__main__":
 
 
     #remove this test line --sp6966
-    ioDir = ioDir+"\\Test\\TC0"
+    ioDir = ioDir+"\\Test\\TC1"
 
 
 
