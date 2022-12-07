@@ -85,13 +85,13 @@ class RegisterFile(object):
 
 class State(object):
     def __init__(self):
-        self.IF = {"nop": False, "PC": 0}
-        self.ID = {"nop": False, "Instr": 0}
-        self.EX = {"nop": False, "Read_data1": 0, "Read_data2": 0, "Imm": 0, "Rs": 0, "Rt": 0, "Wrt_reg_addr": 0, "is_I_type": False, "rd_mem": 0, 
-                   "wrt_mem": 0, "alu_op": 0, "wrt_enable": 0}
-        self.MEM = {"nop": False, "ALUresult": 0, "Store_data": 0, "Rs": 0, "Rt": 0, "Wrt_reg_addr": 0, "rd_mem": 0, 
+        self.IF = {"nop": 0, "PC": 0}
+        self.ID = {"nop": 1, "Instr": 0}
+        self.EX = {"nop": 1, "Read_data1": 0, "Read_data2": 0, "Imm": 0, "Rs": 0, "Rt": 0, "DestReg": 0, "is_I_type": False, "is_B_type": False, "RdDMem": 0, 
+                   "WrDMem": 0, "AluOperation": 0, "WBEnable": 0}
+        self.MEM = {"nop": 1, "ALUresult": 0, "Store_data": 0, "Rs": 0, "Rt": 0, "Wrt_reg_addr": 0, "rd_mem": 0, 
                    "wrt_mem": 0, "wrt_enable": 0}
-        self.WB = {"nop": False, "Wrt_data": 0, "Rs": 0, "Rt": 0, "Wrt_reg_addr": 0, "wrt_enable": 0}
+        self.WB = {"nop": 1, "Wrt_data": 0, "Rs": 0, "Rt": 0, "Wrt_reg_addr": 0, "wrt_enable": 0}
 
 class Core(object):
     def __init__(self, ioDir, imem, dmem):
@@ -196,6 +196,273 @@ class Core(object):
             print("ERROR: no equal string")
             return 0
     
+    #five_stage_IF
+    def five_stage_IF(self):
+        if self.state.IF["nop"] == 1:
+            return
+        self.nextState.ID["Instr"] = InsMem.readInstr(self.ext_imem,self.state.IF["PC"])
+        #TODO deal with HALT instruction, halt is not always the end
+        if self.nextState.ID["Instr"][25:32] == "1111111":
+            self.nextState.ID["nop"]=1
+            self.nextState.IF["nop"]=1
+        else:
+            self.nextState.ID["nop"]=0
+            self.nextState.IF["nop"]=0
+        pass
+    
+    #five_stage_ID
+    def five_stage_ID(self):
+        #test case
+        if self.state.ID["nop"] == 1:
+            return
+        rs1="0"
+        rs2="0"
+        rd="0"
+        imm="0"
+        INS=""
+        ALU=0
+        cur_b = self.state.ID["Instr"]
+        print("--------->",cur_b)
+        #R
+        if(cur_b[(31-6):(32-0)] == "0110011"):
+            print("r", end="")
+            if(cur_b[(31-14):(32-12)] == "000" and cur_b[(31-31):(32-25)] == "0000000"):
+                print("-ADD")
+                rs2=cur_b[(31-24):(32-20)]
+                rs1=cur_b[(31-19):(32-15)]
+                rd=cur_b[(31-11):(32-7)]
+                INS="ADD"
+
+            elif(cur_b[(31-14):(32-12)] == "000" and cur_b[(31-31):(32-25)] == "0100000"):
+                print("_SUB")
+                rs2=cur_b[(31-24):(32-20)]
+                rs1=cur_b[(31-19):(32-15)]
+                rd=cur_b[(31-11):(32-7)]
+                INS="SUB"
+
+            elif(cur_b[(31-14):(32-12)] == "100" and cur_b[(31-31):(32-25)] == "0000000"):
+                print("_XOR")
+                rs2=cur_b[(31-24):(32-20)]
+                rs1=cur_b[(31-19):(32-15)]
+                rd=cur_b[(31-11):(32-7)]
+                INS="XOR"
+
+            elif(cur_b[(31-14):(32-12)] == "110" and cur_b[(31-31):(32-25)] == "0000000"):
+                print("_OR")
+                rs2=cur_b[(31-24):(32-20)]
+                rs1=cur_b[(31-19):(32-15)]
+                rd=cur_b[(31-11):(32-7)]
+                INS="OR"
+
+            elif(cur_b[(31-14):(32-12)] == "111" and cur_b[(31-31):(32-25)] == "0000000"):
+                print("_AND")
+                rs2=cur_b[(31-24):(32-20)]
+                rs1=cur_b[(31-19):(32-15)]
+                rd=cur_b[(31-11):(32-7)]
+                INS="AND"
+
+
+            else:
+                print("ERROR: No matching R type command")
+        #I
+        elif(cur_b[25:32] == "0010011"):
+            print("i", end="")
+            if(cur_b[(31-14):(32-12)] == "000"):
+                print("-ADDI")
+                imm=cur_b[(31-31):(32-20)]
+                rs1=cur_b[(31-19):(32-15)]
+                rd=cur_b[(31-11):(32-7)]
+                INS="ADDI"
+
+            elif(cur_b[(31-14):(32-12)] == "100"):
+                print("-XORI")
+                imm=cur_b[(31-31):(32-20)]
+                rs1=cur_b[(31-19):(32-15)]
+                rd=cur_b[(31-11):(32-7)]
+                INS="XORI"
+
+            elif(cur_b[(31-14):(32-12)] == "110"):
+                print("-ORI")
+                imm=cur_b[(31-31):(32-20)]
+                rs1=cur_b[(31-19):(32-15)]
+                rd=cur_b[(31-11):(32-7)]
+                INS="ORI"
+
+            elif(cur_b[(31-14):(32-12)] == "111"):
+                print("-ANDI")
+                imm=cur_b[(31-31):(32-20)]
+                rs1=cur_b[(31-19):(32-15)]
+                rd=cur_b[(31-11):(32-7)]
+                INS="ANDI"
+
+            else:
+                print("ERROR: No matching I type command")
+
+        elif(cur_b[25:32] == "0000011"):
+            print("i", end="")
+            if(cur_b[(31-14):(32-12)] == "000"):
+                print("-LW")
+                imm=cur_b[(31-31):(32-20)]
+                rs1=cur_b[(31-19):(32-15)]
+                rd=cur_b[(31-11):(32-7)]
+                INS="LW"
+
+            else:
+                print("ERROR: No matching I type command")
+        #J
+        elif(cur_b[25:32] == "1101111"):
+            print("j-JAL")
+            imm=cur_b[(31-31):(32-31)]+cur_b[(31-19):(32-12)]+cur_b[(31-20):(32-20)]+cur_b[(31-30):(32-21)]
+            rd=cur_b[(31-11):(32-7)]
+            INS="JAL"
+        #B
+        elif(cur_b[25:32] == "1100011"):
+            print("b", end="")
+            if(cur_b[(31-14):(32-12)] == "000"):
+                imm=cur_b[(31-31):(32-31)]+cur_b[(31-7):(32-7)]+cur_b[(31-30):(32-25)]+cur_b[(31-11):(32-8)]
+                rs2=cur_b[(31-24):(32-20)]
+                rs1=cur_b[(31-19):(32-15)]
+                print("imm = ",imm,"imm.len=",len(imm))
+                print("-BEQ")
+                INS="BEQ"
+
+            elif(cur_b[(31-14):(32-12)] == "001"):
+                imm=cur_b[(31-31):(32-31)]+cur_b[(31-7):(32-7)]+cur_b[(31-30):(32-25)]+cur_b[(31-11):(32-8)]
+                rs2=cur_b[(31-24):(32-20)]
+                rs1=cur_b[(31-19):(32-15)]
+                print("imm = ",imm,"imm.len=",len(imm))
+                print("-BNE")
+                INS="BNE"
+
+            else:
+                print("ERROR: No matching B type command")
+        #S
+        elif(cur_b[25:32] == "0100011"):
+            print("s", end="")
+            if(cur_b[(31-14):(32-12)] == "010"):
+                print("-SW")
+                imm=cur_b[(31-31):(32-25)]+cur_b[(31-11):(32-7)]
+                rs2=cur_b[(31-24):(32-20)]
+                rs1=cur_b[(31-19):(32-15)]
+                INS="SW"
+
+            else:
+                print("ERROR: No matching S type command")
+        #HALT
+        elif(cur_b[25:32] == "1111111"):
+            print("h-HALT")
+            INS="HALT"
+            self.state.IF["nop"] = True
+        else:
+            print("ERROR: No matching type")
+            INS="HALT"
+
+        if INS==("ADDI" or "ANDI" or "ORI" or "XORI") :
+            self.nextState.EX["is_B_type"] = 0
+            self.nextState.EX["is_I_type"] = 1
+            self.nextState.EX["RdDMem"]=0
+            self.nextState.EX["WrDMem"]=0
+            self.nextState.EX["WBEnable"]=1
+            rs1 = RegisterFile.readRF(self.myRF, rs1)
+            if INS == "ADDI":
+                self.nextState.EX["AluOperation"]= "00"
+            if INS == "ANDI":
+                self.nextState.EX["AluOperation"]= "01"
+            if INS == "ORI":
+                self.nextState.EX["AluOperation"]= "10"
+            if INS == "XORI":
+                self.state.EX["AluOperation"]= "11"
+        elif INS==("ADD" or "XOR" or "AND" or "OR" or "SUB"):
+            self.nextState.EX["is_B_type"] = 0
+            self.nextState.EX["is_I_type"] = 0
+            self.nextState.EX["RdDMem"]=0
+            self.nextState.EX["WrDMem"]=0
+            self.nextState.EX["WBEnable"]=1
+            rs1 = RegisterFile.readRF(self.myRF, rs1)
+            rs2 = RegisterFile.readRF(self.myRF, rs2)
+            if INS == ("ADD" or "SUB"):
+                self.nextState.EX["AluOperation"]= "00"
+                if INS == "SUB":
+                    self.nextState.EX["imm"] = bin(int(self.inverse_bits(imm),2)+1)[:2]
+            if INS == "AND":
+                self.nextState.EX["AluOperation"]= "01"
+            if INS == "OR":
+                self.nextState.EX["AluOperation"]= "10"
+            if INS == "XOR":
+                self.nextState.EX["AluOperation"]= "11"
+        elif INS==("BEQ" or "BNE"):
+            self.nextState.EX["is_I_type"] = 0
+            self.nextState.EX["is_B_type"] = 1
+            self.nextState.EX["RdDMem"]=0
+            self.nextState.EX["WrDMem"]=0
+            self.nextState.EX["WBEnable"]=1
+            rs1 = RegisterFile.readRF(self.myRF, rs1)
+            rs2 = RegisterFile.readRF(self.myRF, rs2)
+        elif INS==("SW"):
+            self.nextState.EX["is_I_type"] = 0
+            self.nextState.EX["is_B_type"] = 0
+            self.nextState.EX["RdDMem"]=0
+            self.nextState.EX["WrDMem"]=1
+            self.nextState.EX["WBEnable"]=0
+            rs1 = RegisterFile.readRF(self.myRF, rs1)
+            rs2 = RegisterFile.readRF(self.myRF, rs2)
+        elif INS==("JAL"):
+            self.nextState.EX["is_I_type"] = 0
+            self.nextState.EX["is_B_type"] = 0
+            self.nextState.EX["RdDMem"]=0
+            self.nextState.EX["WrDMem"]=0
+            self.nextState.EX["WBEnable"]=1
+        elif INS==("LW"):
+            self.nextState.EX["is_I_type"] = 0
+            self.nextState.EX["is_B_type"] = 0
+            self.nextState.EX["RdDMem"]=1
+            self.nextState.EX["WrDMem"]=0
+            self.nextState.EX["WBEnable"]=1
+        elif INS==("HALT"):
+            self.nextState.EX["is_I_type"] = 0
+            self.nextState.EX["is_B_type"] = 0
+            self.nextState.EX["RdDMem"]=0
+            self.nextState.EX["WrDMem"]=0
+            self.nextState.EX["WBEnable"]=0
+
+        self.nextState.EX["Read_data1"] = rs1
+        self.nextState.EX["Read_data2"] = rs2
+        self.nextState.EX["imm"] = imm
+        self.nextState.EX["DestReg"] = rd
+        self.nextState.EX["nop"]=0
+        if(INS == "HALT"):
+            self.nextState.EX["nop"]=1
+    
+    #five_stage_EX
+    def five_stage_EX(self):
+
+        pass
+    """
+        if alu, 
+	        if i type
+		        do read_data1 and Imm (addi...)
+	    if not i type
+		        do read_data1 and read_data2(add...)
+        if not alu
+	        if i type and RdDMem
+		        do read_data1 and Imm (LW)
+	        if not i type
+		        if WrDMem is true
+			        SW
+		        else
+		        (JAL,BEQ,BNE)
+
+
+        if SW or HALt
+	        WBEnable = 0
+
+    """
+
+    def five_stage_MEM(self, cur_b):
+        pass
+
+    def five_stage_WB(self, cur_b):
+        pass
 
     #single stage steps
     def seperate_bits(self, cur_b):
@@ -354,8 +621,6 @@ class Core(object):
             value = bin(int(operand1,2)+int(operand2,2))
             value = value[2:]
             value = self.result_format_32(value)
-        #Todo
-        #need to test on substract to negaticve value and what happened
         elif INS == "SUB":
             operand1 = RegisterFile.readRF(self.myRF, rs1)
             operand2 = RegisterFile.readRF(self.myRF, rs2)
@@ -433,6 +698,9 @@ class Core(object):
         elif INS == "LW":
             ALU = int(rs1, 2) + int(imm, 2)
         elif INS == "SW":
+            #imm is sign extension!
+            #TODO!!!!!
+            #TOTEST!!!!
             ALU = int(rs1, 2) + int(imm, 2)
         elif INS == "HALT":
             print("HALT")
@@ -525,23 +793,28 @@ class FiveStageCore(Core):
 
     def step(self):
         # Your implementation
-        # --------------------- WB stage ---------------------
+ #       if self.state.IF["nop"] and self.state.ID["nop"] and self.state.EX["nop"] and self.state.MEM["nop"] and self.state.WB["nop"]:
+    #        self.halted = True
         
-        
-        
-        # --------------------- MEM stage --------------------
-        
-        
-        # --------------------- EX stage ---------------------
-        
-        
-        # --------------------- ID stage ---------------------
-        
-        
-        # --------------------- IF stage ---------------------
-        self.halted = True
-        if self.state.IF["nop"] and self.state.ID["nop"] and self.state.EX["nop"] and self.state.MEM["nop"] and self.state.WB["nop"]:
+        #Test
+        if self.state.IF["nop"] and self.state.ID["nop"]:
             self.halted = True
+        
+        if not self.halted:
+
+            self.five_stage_ID()
+
+            self.five_stage_IF()
+            #Test
+            if not (self.state.IF["nop"] and self.state.ID["nop"]):
+                self.nextState.IF["PC"]+=4
+
+
+      #      if not (self.state.IF["nop"] and self.state.ID["nop"] and self.state.EX["nop"] and self.state.MEM["nop"] and self.state.WB["nop"]):
+      #          self.nextState.IF["PC"]+=4
+        
+        #Test
+
         
         self.myRF.outputRF(self.cycle) # dump RF
         self.printState(self.nextState, self.cycle) # print states after executing cycle 0, cycle 1, cycle 2 ... 
@@ -552,9 +825,13 @@ class FiveStageCore(Core):
     def printState(self, state, cycle):
         printstate = ["-"*70+"\n", "State after executing cycle: " + str(cycle) + "\n"]
         printstate.extend(["IF." + key + ": " + str(val) + "\n" for key, val in state.IF.items()])
+        printstate.extend("\n")
         printstate.extend(["ID." + key + ": " + str(val) + "\n" for key, val in state.ID.items()])
+        printstate.extend("\n")
         printstate.extend(["EX." + key + ": " + str(val) + "\n" for key, val in state.EX.items()])
+        printstate.extend("\n")
         printstate.extend(["MEM." + key + ": " + str(val) + "\n" for key, val in state.MEM.items()])
+        printstate.extend("\n")
         printstate.extend(["WB." + key + ": " + str(val) + "\n" for key, val in state.WB.items()])
 
         if(cycle == 0): perm = "w"
@@ -572,7 +849,7 @@ if __name__ == "__main__":
 
 
     #remove this test line --sp6966
-    ioDir = ioDir+"\\Test\\TC3"
+    ioDir = ioDir+"\\Test\\TC0"
 
 
 
@@ -593,9 +870,10 @@ if __name__ == "__main__":
 
 
     while(True):
-        if not ssCore.halted:
-            ssCore.step()
-        
+        #if not ssCore.halted:
+         #   ssCore.step()
+        ssCore.halted = True
+
         if not fsCore.halted:
             fsCore.step()
 
