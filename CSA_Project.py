@@ -87,7 +87,7 @@ class State(object):
     def __init__(self):
         self.IF = {"nop": 0, "PC": 0}
         self.ID = {"nop": 1, "Instr": 0}
-        self.EX = {"nop": 1, "Read_data1": 0, "Read_data2": 0, "Imm": 0, "Rs": 0, "Rt": 0, "DestReg": 0, "is_I_type": False, "is_B_type": False, "RdDMem": 0, 
+        self.EX = {"nop": 1, "Read_data1": 0, "Read_data2": 0, "Imm": 0, "Rs": 0, "Rt": 0, "DestReg": 0, "is_I_type": 0, "is_B_type": 0, "is_J_type": 0,"RdDMem": 0, 
                    "WrDMem": 0, "AluOperation": 0, "WBEnable": 0}
         self.MEM = {"nop": 1, "ALUresult": 0, "Store_data": 0, "Rs": 0, "Rt": 0, "Wrt_reg_addr": 0, "rd_mem": 0, 
                    "wrt_mem": 0, "wrt_enable": 0}
@@ -200,12 +200,14 @@ class Core(object):
     def five_stage_IF(self):
         if self.state.IF["nop"] == 1:
             return
+        str = InsMem.readInstr(self.ext_imem,self.state.IF["PC"])
         self.nextState.ID["Instr"] = InsMem.readInstr(self.ext_imem,self.state.IF["PC"])
         #TODO deal with HALT instruction, halt is not always the end
-        if self.nextState.ID["Instr"][25:32] == "1111111":
+        if str[25:32] == "1111111":
             self.nextState.ID["nop"]=1
             self.nextState.IF["nop"]=1
         else:
+            self.nextState.ID["Instr"] = str
             self.nextState.ID["nop"]=0
             self.nextState.IF["nop"]=0
         pass
@@ -214,6 +216,7 @@ class Core(object):
     def five_stage_ID(self):
         #test case
         if self.state.ID["nop"] == 1:
+            self.nextState.EX["nop"] = 1
             return
         rs1="0"
         rs2="0"
@@ -360,6 +363,7 @@ class Core(object):
         if INS==("ADDI" or "ANDI" or "ORI" or "XORI") :
             self.nextState.EX["is_B_type"] = 0
             self.nextState.EX["is_I_type"] = 1
+            self.nextState.EX["is_J_type"] = 0
             self.nextState.EX["RdDMem"]=0
             self.nextState.EX["WrDMem"]=0
             self.nextState.EX["WBEnable"]=1
@@ -375,6 +379,7 @@ class Core(object):
         elif INS==("ADD" or "XOR" or "AND" or "OR" or "SUB"):
             self.nextState.EX["is_B_type"] = 0
             self.nextState.EX["is_I_type"] = 0
+            self.nextState.EX["is_J_type"] = 0
             self.nextState.EX["RdDMem"]=0
             self.nextState.EX["WrDMem"]=0
             self.nextState.EX["WBEnable"]=1
@@ -383,7 +388,7 @@ class Core(object):
             if INS == ("ADD" or "SUB"):
                 self.nextState.EX["AluOperation"]= "00"
                 if INS == "SUB":
-                    self.nextState.EX["imm"] = bin(int(self.inverse_bits(imm),2)+1)[:2]
+                    self.nextState.EX["Imm"] = bin(int(self.inverse_bits(imm),2)+1)[:2]
             if INS == "AND":
                 self.nextState.EX["AluOperation"]= "01"
             if INS == "OR":
@@ -393,14 +398,20 @@ class Core(object):
         elif INS==("BEQ" or "BNE"):
             self.nextState.EX["is_I_type"] = 0
             self.nextState.EX["is_B_type"] = 1
+            self.nextState.EX["is_J_type"] = 0
             self.nextState.EX["RdDMem"]=0
             self.nextState.EX["WrDMem"]=0
             self.nextState.EX["WBEnable"]=1
             rs1 = RegisterFile.readRF(self.myRF, rs1)
             rs2 = RegisterFile.readRF(self.myRF, rs2)
+            if INS=="BEQ":
+                self.nextState.EX["AluOperation"]= "00"
+            if INS=="BNE":
+                self.nextState.EX["AluOperation"]= "01"
         elif INS==("SW"):
             self.nextState.EX["is_I_type"] = 0
             self.nextState.EX["is_B_type"] = 0
+            self.nextState.EX["is_J_type"] = 0
             self.nextState.EX["RdDMem"]=0
             self.nextState.EX["WrDMem"]=1
             self.nextState.EX["WBEnable"]=0
@@ -409,60 +420,201 @@ class Core(object):
         elif INS==("JAL"):
             self.nextState.EX["is_I_type"] = 0
             self.nextState.EX["is_B_type"] = 0
+            self.nextState.EX["is_J_type"] = 1
             self.nextState.EX["RdDMem"]=0
             self.nextState.EX["WrDMem"]=0
             self.nextState.EX["WBEnable"]=1
         elif INS==("LW"):
             self.nextState.EX["is_I_type"] = 0
             self.nextState.EX["is_B_type"] = 0
+            self.nextState.EX["is_J_type"] = 0
             self.nextState.EX["RdDMem"]=1
             self.nextState.EX["WrDMem"]=0
             self.nextState.EX["WBEnable"]=1
         elif INS==("HALT"):
             self.nextState.EX["is_I_type"] = 0
             self.nextState.EX["is_B_type"] = 0
-            self.nextState.EX["RdDMem"]=0
-            self.nextState.EX["WrDMem"]=0
-            self.nextState.EX["WBEnable"]=0
+            self.nextState.EX["is_J_type"] = 0
+            self.nextState.EX["RdDMem"]= 0
+            self.nextState.EX["WrDMem"]= 0
+            self.nextState.EX["WBEnable"]= 0
 
         self.nextState.EX["Read_data1"] = rs1
         self.nextState.EX["Read_data2"] = rs2
-        self.nextState.EX["imm"] = imm
+        self.nextState.EX["Imm"] = imm
         self.nextState.EX["DestReg"] = rd
         self.nextState.EX["nop"]=0
         if(INS == "HALT"):
-            self.nextState.EX["nop"]=1
+            self.nextState.EX["nop"]= 1
+        else:
+            self.nextState.EX["nop"]= 0
     
     #five_stage_EX
     def five_stage_EX(self):
 
+#           add 00
+#           and 01
+#           or  10
+#           xor 11
+#           bne 01
+#           beq 00
+        if self.state.EX["nop"] == 1:
+            self.nextState.MEM["nop"] = 1
+            return
+
+        rs1 = self.state.EX["Read_data1"]
+        rs2 = self.state.EX["Read_data2"]
+        imm = self.state.EX["Imm"]
+        rd = self.state.EX["DestReg"]
+
+        itype = self.state.EX["is_I_type"]
+        btype = self.state.EX["is_B_type"]
+        jtype = self.state.EX["is_J_type"]
+        alu = self.state.EX["AluOperation"]
+        wbenable = self.state.EX["WBEnable"]
+        rddmem = self.state.EX["RdDMem"]
+        wrdmem = self.state.EX["WrDMem"]
+
+        #ADD
+        if alu == "00" and itype == 0 and btype == 0 and jtype == 0 and wbenable==1 and rddmem == 0 and wrdmem == 0:
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            operand2 = RegisterFile.readRF(self.myRF, rs2)
+            value = bin(int(operand1,2)+int(operand2,2))
+            value = value[2:]
+            value = self.result_format_32(value)
+        #XOR
+        elif alu == "11" and itype == 0 and btype == 0 and jtype == 0 and wbenable==1 and rddmem == 0 and wrdmem == 0:
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            operand2 = RegisterFile.readRF(self.myRF, rs2)
+            value=bin(int(operand1,2) ^ int(operand2,2))
+            value = value[2:]
+            value = self.result_format_32(value)
+        #OR
+        elif alu == "10" and itype == 0 and btype == 0 and jtype == 0 and wbenable==1 and rddmem == 0 and wrdmem == 0:
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            operand2 = RegisterFile.readRF(self.myRF, rs2)
+            value = bin(int(operand1,2) | int(operand2,2))
+            value = value[2:]
+            value = self.result_format_32(value)
+        #AND
+        elif alu == "01" and itype == 0 and btype == 0 and jtype == 0 and wbenable==1 and rddmem == 0 and wrdmem == 0:
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            operand2 = RegisterFile.readRF(self.myRF, rs2)
+            value = bin(int(operand1,2) & int(operand2,2))
+            value = value[2:]
+            value = self.result_format_32(value)
+        #ADDI
+        elif alu == "00" and itype == 1:
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            value = self.func_addi(operand1,imm)
+        #XORI
+        elif alu == "11" and itype == 1:
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            value = self.func_xori(operand1,imm)
+        #ORI
+        elif alu == "10" and itype == 1:
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            value = self.func_ori(operand1,imm)
+        #ANDI
+        elif alu == "01" and itype == 1:
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            value = self.func_andi(operand1,imm)
+        #BNE
+        elif alu == "01" and btype == 1 and wbenable=="1":
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            operand2 = RegisterFile.readRF(self.myRF, rs2)
+            value = self.func_bne(operand1,operand2) #value =1 true, value = 0 false
+            if value:
+                current_pc_value = bin(self.nextState.IF["PC"])[2:].zfill(32)
+                imm = self.bin_sign_ext_32(imm+"0")
+                next_PC = int(self.func_addi(current_pc_value,imm),2)-4
+                #we minus 4 here since we will add the 4 back in the step(), this could be a bad fix to make it the same as the TEST case result
+                self.nextState.IF["PC"]=next_PC
+        #BEQ
+        elif alu == "00" and btype == 1 and wbenable=="1":
+            operand1 = RegisterFile.readRF(self.myRF, rs1)
+            operand2 = RegisterFile.readRF(self.myRF, rs2)
+            value = self.func_beq(operand1,operand2) #value =1 true, value = 0 false
+            if value:
+                current_pc_value = bin(self.nextState.IF["PC"])[2:].zfill(32)
+                imm = self.bin_sign_ext_32(imm+"0")
+                next_PC = int(self.func_addi(current_pc_value,imm),2)-4
+                #we minus 4 here since we will add the 4 back in the step(), this could be a bad fix to make it the same as the TEST case result
+                self.nextState.IF["PC"]=next_PC
+        #JAL
+        elif jtype == 1:
+            #caluculate PC+4
+            imm = self.bin_sign_ext_32(imm+"0")
+            value = bin(self.nextState.IF["PC"]+4)[2:]
+            #set next PC to imm
+            value.zfill(32)
+            current_pc_value = bin(self.nextState.IF["PC"])[2:].zfill(32)
+            next_PC = int(self.func_addi(current_pc_value,imm),2)-4
+            self.nextState.IF["PC"]=next_PC
+            pass
+        #LW
+        elif rddmem == 1:
+            value = int(rs1, 2) + int(imm, 2)
+        #SW
+        elif wrdmem == 1:
+            #imm is sign extension!
+            #TODO!!!!!
+            #TOTEST!!!!
+            value = int(rs1, 2) + int(imm, 2)
+            self.nextState.MEM["Store_data"] = RegisterFile.readRF(self.myRF, rs2)
+
+        self.nextState.MEM["nop"] = 0
+        self.nextState.MEM["ALUresult"] = value
+        #only in sw, for sw and lw, value is ALU in single stage case
+        self.nextState.MEM["Wrt_reg_addr"] = rd
+        self.nextState.MEM["rd_mem"] = rddmem
+        self.nextState.MEM["wrt_mem"] = wrdmem
+        self.nextState.MEM["wrt_enable"] = wbenable
         pass
-    """
-        if alu, 
-	        if i type
-		        do read_data1 and Imm (addi...)
-	    if not i type
-		        do read_data1 and read_data2(add...)
-        if not alu
-	        if i type and RdDMem
-		        do read_data1 and Imm (LW)
-	        if not i type
-		        if WrDMem is true
-			        SW
-		        else
-		        (JAL,BEQ,BNE)
+
+    def five_stage_MEM(self):
+        if self.state.MEM["nop"] == 1:
+            self.nextState.WB["nop"] = 1
+            return
+        ALU=""
+        value=""
+        rddmem=0
+        wrdmem=0
+        rs2 = self.state.MEM["Store_data"]
+        ALU == self.state.MEM["ALUresult"] #this is the address
+        value == self.state.MEM["Store_data"] #this only for sw
+        rddmem == self.state.MEM["rd_mem"]
+        wrdmem == self.state.MEM["wrt_mem"]
+
+        #LW
+        if rddmem:
+            #get value from the address of ALU
+            ALU = DataMem.readInstr(self.ext_dmem, ALU)
+            self.nextState.WB["Wrt_data"] = result
+        #SW
+        elif wrdmem:
+            result = RegisterFile.readRF(self.myRF, rs2)
+            DataMem.writeDataMem(self.ext_dmem,value,result)
+        else:
+            pass
 
 
-        if SW or HALt
-	        WBEnable = 0
+        self.nextState.WB["nop"] = 0
+        self.nextState.WB["Wrt_data"] = ALU
+        self.nextState.WB["Wrt_reg_addr"] = self.state.MEM["Wrt_reg_addr"]
+        self.nextState.WB["wrt_enable"] = self.state.MEM["wrt_enable"]
 
-    """
 
-    def five_stage_MEM(self, cur_b):
-        pass
 
-    def five_stage_WB(self, cur_b):
-        pass
+    def five_stage_WB(self):
+        if self.state.WB["nop"] == 1:
+            return
+        if self.state.MEM["nop"] == 1:
+            self.nextState.WB["nop"] =1
+        rd = self.state.WB["Wrt_reg_addr"]
+        value = self.state.WB["Wrt_data"]
+        RegisterFile.writeRF(self.myRF,rd,value)
+
 
     #single stage steps
     def seperate_bits(self, cur_b):
@@ -793,29 +945,19 @@ class FiveStageCore(Core):
 
     def step(self):
         # Your implementation
- #       if self.state.IF["nop"] and self.state.ID["nop"] and self.state.EX["nop"] and self.state.MEM["nop"] and self.state.WB["nop"]:
-    #        self.halted = True
-        
-        #Test
-        if self.state.IF["nop"] and self.state.ID["nop"]:
+        if self.state.IF["nop"] and self.state.ID["nop"] and self.state.EX["nop"] and self.state.MEM["nop"] and self.state.WB["nop"]:
             self.halted = True
         
         if not self.halted:
-
+            self.five_stage_WB()
+            self.five_stage_MEM()
+            self.five_stage_EX()
             self.five_stage_ID()
-
             self.five_stage_IF()
-            #Test
-            if not (self.state.IF["nop"] and self.state.ID["nop"]):
-                self.nextState.IF["PC"]+=4
 
+        if not (self.state.IF["nop"] and self.state.ID["nop"] and self.state.EX["nop"] and self.state.MEM["nop"] and self.state.WB["nop"]):
+            self.nextState.IF["PC"]+=4
 
-      #      if not (self.state.IF["nop"] and self.state.ID["nop"] and self.state.EX["nop"] and self.state.MEM["nop"] and self.state.WB["nop"]):
-      #          self.nextState.IF["PC"]+=4
-        
-        #Test
-
-        
         self.myRF.outputRF(self.cycle) # dump RF
         self.printState(self.nextState, self.cycle) # print states after executing cycle 0, cycle 1, cycle 2 ... 
         
