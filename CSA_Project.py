@@ -443,7 +443,7 @@ class Core(object):
             self.nextState.EX["is_J_type"] = 0
             self.nextState.EX["RdDMem"]=0
             self.nextState.EX["WrDMem"]=0
-            self.nextState.EX["WBEnable"]=1
+            self.nextState.EX["WBEnable"]=0
             op1 = RegisterFile.readRF(self.myRF, rs1)
             op2 = RegisterFile.readRF(self.myRF, rs2)
             if INS=="BEQ":
@@ -492,7 +492,7 @@ class Core(object):
             self.nextState.EX["nop"]= 1
         else:
             self.nextState.EX["nop"]= 0
-        #hazard checking ID->EX
+        #hazard checking WB->ID
         if self.nextState.WB["Wrt_reg_addr"] == rs1:
             self.nextState.EX["Read_data1"] = self.nextState.WB["Wrt_data"]
             return
@@ -500,6 +500,18 @@ class Core(object):
             self.nextState.EX["Read_data2"] = self.nextState.WB["Wrt_data"]
             if INS == "SUB":
                 v = self.nextState.WB["Wrt_data"]
+                op2 = bin(int(self.inverse_bits(v),2)+1)[2:]
+                self.nextState.EX["Read_data2"] = op2
+            return
+
+        #hazard checking MEM->ID may be need check not LW
+        if self.nextState.MEM["Wrt_reg_addr"] == rs1 and self.nextState.MEM["wrt_enable"] == 1:
+            self.nextState.EX["Read_data1"] = self.nextState.MEM["ALUresult"]
+            return
+        elif self.nextState.MEM["Wrt_reg_addr"] == rs2 and self.nextState.MEM["wrt_enable"] == 1:
+            self.nextState.EX["Read_data2"] = self.nextState.MEM["ALUresult"]
+            if INS == "SUB":
+                v = self.nextState.MEM["Wrt_data"]
                 op2 = bin(int(self.inverse_bits(v),2)+1)[2:]
                 self.nextState.EX["Read_data2"] = op2
             return
@@ -539,6 +551,7 @@ class Core(object):
         rddmem = self.state.EX["RdDMem"]
         wrdmem = self.state.EX["WrDMem"]
 
+        value=""
         #ADD
         if alu == "00" and itype == 0 and btype == 0 and jtype == 0 and wbenable==1 and rddmem == 0 and wrdmem == 0:
             value = bin(int(operand1,2)+int(operand2,2))
@@ -572,33 +585,52 @@ class Core(object):
         elif alu == "01" and itype == 1:
             value = self.func_andi(operand1,imm)
         #BNE
-        elif alu == "01" and btype == 1 and wbenable=="1":
+        elif alu == "01" and btype == 1 and wbenable==0:
+            print("getin")
             value = self.func_bne(operand1,operand2) #value =1 true, value = 0 false
             if value:
                 current_pc_value = bin(self.nextState.IF["PC"])[2:].zfill(32)
                 imm = self.bin_sign_ext_32(imm+"0")
                 next_PC = int(self.func_addi(current_pc_value,imm),2)-4
-                #we minus 4 here since we will add the 4 back in the step(), this could be a bad fix to make it the same as the TEST case result
-                self.nextState.IF["PC"]=next_PC
+                #self.nextState.IF["PC"]=next_PC
+                #forwarding problem 
+                #nop next state Ex which is from this ID and change the current IF
+                self.state.ID["nop"]=1
+                self.state.IF["PC"]=next_PC
+                if self.state.IF["nop"] == 1:
+                    self.state.IF["nop"] =0
+                    print("here")
+            else:
+                print("not good")
         #BEQ
-        elif alu == "00" and btype == 1 and wbenable=="1":
+        elif alu == "00" and btype == 1 and wbenable==0:
             value = self.func_beq(operand1,operand2) #value =1 true, value = 0 false
             if value:
                 current_pc_value = bin(self.nextState.IF["PC"])[2:].zfill(32)
                 imm = self.bin_sign_ext_32(imm+"0")
                 next_PC = int(self.func_addi(current_pc_value,imm),2)-4
-                #we minus 4 here since we will add the 4 back in the step(), this could be a bad fix to make it the same as the TEST case result
-                self.nextState.IF["PC"]=next_PC
+                #self.nextState.IF["PC"]=next_PC
+                #forwarding problem 
+                #nop next state Ex which is from this ID and change the current IF
+                self.state.ID["nop"]=1
+                self.state.IF["PC"]=next_PC
+                if self.state.IF["nop"] == 1:
+                    self.state.IF["nop"] =0
+                    print("here")
         #JAL
         elif jtype == 1:
             #caluculate PC+4
             imm = self.bin_sign_ext_32(imm+"0")
-            value = bin(self.nextState.IF["PC"]+4)[2:]
+            value = bin(self.nextState.IF["PC"])[2:]
             #set next PC to imm
             value.zfill(32)
             current_pc_value = bin(self.nextState.IF["PC"])[2:].zfill(32)
             next_PC = int(self.func_addi(current_pc_value,imm),2)-4
-            self.nextState.IF["PC"]=next_PC
+            self.state.ID["nop"]=1
+            self.state.IF["PC"]=next_PC
+            if self.state.IF["nop"] == 1:
+                self.state.IF["nop"] =0
+                print("here")
             pass
         #LW
         elif rddmem == 1:
@@ -1036,7 +1068,7 @@ if __name__ == "__main__":
 
 
     #remove this test line --sp6966
-    ioDir = ioDir+"\\Test\\TC1"
+    ioDir = ioDir+"\\Test\\TC4"
 
 
 
