@@ -18,7 +18,8 @@ class InsMem(object):
         pass
 
     def isOutofbound(self, ReadAddress):
-        if ReadAddress>=len(self.IMem):
+        l = len(self.IMem)
+        if ReadAddress>=l:
             return True
         else:
             return False
@@ -56,6 +57,29 @@ class DataMem(object):
         # write data into byte addressable memory
         pass
                      
+    def outputresult(self,io:str,ss_cyle:int, ss_instr:int,fs_cyle:int, fs_instr:int):
+        resPath = self.ioDir + "\\" + self.id + "PerformanceMetrics_Result.txt"
+        with open(resPath, "w") as rp:
+            rp.writelines([resPath+"\n"])
+            rp.writelines(["----Single stage Cycle----"+"\n"])
+            rp.writelines(["Number of cycles taken:"+str(ss_cyle)+"\n"])
+            cpi = 0.0
+            ipc = 0.0
+            cpi = ss_cyle/ss_instr
+            ipc = ss_instr/ss_cyle
+            rp.writelines(["Cycles per instruction:" +str(cpi)+"\n"])
+            rp.writelines(["Instructions per cycle:" +str(ipc)+"\n"])
+
+            rp.writelines(["----Five stage  Cycle----"+"\n"])
+            rp.writelines(["Number of cycles taken:"+str(fs_cyle)+"\n"])
+            cpi = 0.0
+            ipc = 0.0
+            cpi = fs_cyle/fs_instr
+            ipc = fs_instr/fs_cyle
+            rp.writelines(["Cycles per instruction:" +str(cpi)+"\n"])
+            rp.writelines(["Instructions per cycle:" +str(ipc)+"\n"])
+            
+
     def outputDataMem(self):
         resPath = self.ioDir + "\\" + self.id + "_DMEMResult.txt"
         with open(resPath, "w") as rp:
@@ -110,6 +134,7 @@ class Core(object):
         self.ext_imem = imem
         self.ext_dmem = dmem
         self.stallfactor = 0
+        self.inst_count = 0
     
     #this function format the result to 32 bits binary
     def result_format_32(self, result:str):
@@ -216,8 +241,10 @@ class Core(object):
             return
         str = InsMem.readInstr(self.ext_imem,self.state.IF["PC"])
         self.nextState.IF["PC"]+=4
+        self.inst_count=self.inst_count+1
         self.nextState.ID["Instr"] = InsMem.readInstr(self.ext_imem,self.state.IF["PC"])
         #TODO deal with HALT instruction, halt is not always the end
+        #possibly we just need to set the next IF["nop"] to 1 but not ID, ID only to 1 if there is no newline
         if str[25:32] == "1111111":
             self.nextState.ID["nop"]=1
             self.nextState.IF["nop"]=1
@@ -385,19 +412,15 @@ class Core(object):
             if self.state.MEM["rd_mem"]==1:
                 self.nextstate.EX["nop"] = 1 #mark this step as not functioning
                 self.stallfactor=1
-                print("LW------------Wrt_reg_addr",self.state.MEM["Wrt_reg_addr"]," rs1 = ",rs1)
                 return
             elif self.state.MEM["wrt_mem"]==1:
-                print("SW------------Wrt_reg_addr",self.state.MEM["Wrt_reg_addr"]," rs1 = ",rs1)
                 pass
         elif self.state.MEM["Wrt_reg_addr"] == rs2 and self.state.MEM["nop"]==0:
             if self.state.MEM["rd_mem"]==1:
                 self.nextState.EX["nop"] = 1 #mark this step as not functioning
                 self.stallfactor=1
-                print("LW------------Wrt_reg_addr",self.state.MEM["Wrt_reg_addr"]," rs2 = ",rs2)
                 return
             elif self.state.MEM["wrt_mem"]==1:
-                print("SW------------Wrt_reg_addr",self.state.MEM["Wrt_reg_addr"]," rs2 = ",rs2)
                 pass
 
 
@@ -519,10 +542,7 @@ class Core(object):
         #hazard checking SW
         if self.nextState.MEM["Wrt_reg_addr"] == rs2:
             if self.nextState.EX["WrDMem"]==1:
-                print("SW------------Wrt_reg_addr",self.state.MEM["Wrt_reg_addr"]," rs2 = ",rs2)
                 self.nextState.MEM["Store_data"] = self.nextState.EX["StData"]
-                print(self.nextState.EX["StData"])
-                print(self.state.EX["StData"])
                 pass
     
     #five_stage_EX
@@ -599,9 +619,9 @@ class Core(object):
                 self.state.IF["PC"]=next_PC
                 if self.state.IF["nop"] == 1:
                     self.state.IF["nop"] =0
-                    print("here")
+                self.inst_count = self.inst_count -1
             else:
-                print("not good")
+                pass
         #BEQ
         elif alu == "00" and btype == 1 and wbenable==0:
             value = self.func_beq(operand1,operand2) #value =1 true, value = 0 false
@@ -616,7 +636,7 @@ class Core(object):
                 self.state.IF["PC"]=next_PC
                 if self.state.IF["nop"] == 1:
                     self.state.IF["nop"] =0
-                    print("here")
+                self.inst_count = self.inst_count -1
         #JAL
         elif jtype == 1:
             #caluculate PC+4
@@ -630,7 +650,7 @@ class Core(object):
             self.state.IF["PC"]=next_PC
             if self.state.IF["nop"] == 1:
                 self.state.IF["nop"] =0
-                print("here")
+            self.inst_count = self.inst_count -1
             pass
         #LW
         elif rddmem == 1:
@@ -810,6 +830,7 @@ class Core(object):
                 print("imm = ",imm,"imm.len=",len(imm))
                 print("-BEQ")
                 INS="BEQ"
+                self.inst_count = self.inst_count-1
 
             elif(cur_b[(31-14):(32-12)] == "001"):
                 imm=cur_b[(31-31):(32-31)]+cur_b[(31-7):(32-7)]+cur_b[(31-30):(32-25)]+cur_b[(31-11):(32-8)]
@@ -818,6 +839,7 @@ class Core(object):
                 print("imm = ",imm,"imm.len=",len(imm))
                 print("-BNE")
                 INS="BNE"
+                self.inst_count = self.inst_count-1
 
             else:
                 print("ERROR: No matching B type command")
@@ -838,6 +860,7 @@ class Core(object):
             print("h-HALT")
             INS="HALT"
             self.state.IF["nop"] = True
+            self.inst_count=self.inst_count+1
         else:
             print("ERROR: No matching type")
             INS="HALT"
@@ -998,6 +1021,7 @@ class SingleStageCore(Core):
             self.seperate_bits(Current_bits)
             if not self.state.IF["nop"]:
                 self.nextState.IF["PC"]+=4
+                self.inst_count=self.inst_count+1
 
         self.myRF.outputRF(self.cycle) # dump RF
         self.printState(self.nextState, self.cycle) # print states after executing cycle 0, cycle 1, cycle 2 ... 
@@ -1065,13 +1089,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     ioDir = os.path.abspath(args.iodir)
-
-
     #remove this test line --sp6966
-    ioDir = ioDir+"\\Test\\TC4"
-
-
-
+    ioDir = ioDir+"\\Test\\TC2"
     print("IO Directory:", ioDir)
 
     imem = InsMem("Imem", ioDir)
@@ -1080,18 +1099,9 @@ if __name__ == "__main__":
     
     ssCore = SingleStageCore(ioDir, imem, dmem_ss)
     fsCore = FiveStageCore(ioDir, imem, dmem_fs)
-    
-    #test functions
-    print("-----------------------------------------------------------------------------")
-
-    print("-----------------------------------------------------------------------------")
-    #test functions
-
-
     while(True):
-        #if not ssCore.halted:
-         #   ssCore.step()
-        ssCore.halted = True
+        if not ssCore.halted:
+            ssCore.step()
 
         if not fsCore.halted:
             fsCore.step()
@@ -1101,4 +1111,5 @@ if __name__ == "__main__":
     
     # dump SS and FS data mem.
     dmem_ss.outputDataMem()
+    dmem_ss.outputresult(ioDir,ssCore.cycle,ssCore.inst_count,fsCore.cycle,fsCore.inst_count)
     dmem_fs.outputDataMem()
